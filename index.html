@@ -37,6 +37,25 @@
             <fieldset id="receptores"></fieldset>
           </article>
         </div>
+        <article>
+          <header>Facturas</header>
+          <div class="overflow-auto">
+            <table class="striped">
+              <thead>
+                <tr>
+                  <th scope="col"></th>
+                  <th scope="col">Consecutivo</th>
+                  <th scope="col">Fecha</th>
+                  <th scope="col">Emisor</th>
+                  <th scope="col">Receptor</th>
+                  <th scope="col">Moneda</th>
+                  <th scope="col">Total</th>
+                </tr>
+              </thead>
+              <tbody id="facturas"></tbody>
+            </table>
+          </div>
+        </article>
         <footer>
           <p>2025 © larmcr</p>
         </footer>
@@ -87,6 +106,27 @@
           return id;
         };
 
+        const showFacturas = (consecutivos) => {
+          const facturasElement = doc.getElementById('facturas');
+          facturasElement.innerHTML = '';
+          consecutivos.forEach((consecutivo) => {
+            if (facturas[consecutivo]) {
+              const { Emisor, Receptor, Fecha, Moneda, Total } = facturas[consecutivo];
+              const tr = doc.createElement('tr');
+              tr.innerHTML = `
+                <th scope="row"><input type="checkbox" role="switch" class="consecutivo" value="${consecutivo}" /></th>
+                <td>${consecutivo}</td>
+                <td>${Fecha}</td>
+                <td><button>${entidades[Emisor].Nombre}</button></td>
+                <td><button>${entidades[Receptor].Nombre}</button></td>
+                <td><button>${Moneda}</button></td>
+                <td>${Math.round(Total)}</td>
+              `;
+              facturasElement.appendChild(tr);
+            }
+          });
+        };
+
         const choiceEmisorReceptor = (ev) => {
           const emisores = doc.querySelectorAll('.emisor');
           const receptores = doc.querySelectorAll('.receptor');
@@ -101,7 +141,7 @@
               consecutivos.push(...entidades[receptor.value].Emisores);
             }
           });
-          console.info(consecutivos);
+          showFacturas(consecutivos);
         };
 
         const addEmisor = (idEmisor) => {
@@ -149,7 +189,7 @@
         };
 
         const processJson = (json) => {
-          // console.info(json);
+          console.info(json);
           const { NumeroConsecutivo, Emisor, Receptor } = json.FacturaElectronica;
           const idEmisor = addEntidad(Emisor);
           const idReceptor = addEntidad(Receptor);
@@ -165,6 +205,7 @@
             Fecha: json.FacturaElectronica.FechaEmision,
             Moneda: json.FacturaElectronica.ResumenFactura?.CodigoTipoMoneda?.CodigoMoneda ?? 'CRC',
             TipoCambio: json.FacturaElectronica.ResumenFactura?.CodigoTipoMoneda?.TipoCambio ?? 1.0,
+            Total: json.FacturaElectronica.ResumenFactura?.TotalComprobante ?? 0.0,
             Detalle: detalle,
           };
         };
