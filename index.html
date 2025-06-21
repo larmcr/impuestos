@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css" />
+    <title>Impuestos</title>
+  </head>
+  <body>
+    <main class="container-fluid">
+      <article>
+        <header>
+          <hgroup>
+            <h1>Impuestos</h1>
+            <p>Valor Agregado (IVA)</p>
+          </hgroup>
+        </header>
+        <div class="grid">
+          <article>
+            <header>Archivos XML</header>
+            <div id="drop-zone">
+              <p>Agregue aquí los archivos o haz clic para buscar</p>
+              <input type="file" id="file-input" multiple style="display: none" />
+            </div>
+            <br />
+            <div>
+              <ul id="file-list"></ul>
+            </div>
+          </article>
+          <article>
+            <header>Emisores</header>
+            <fieldset id="emisores"></fieldset>
+          </article>
+          <article>
+            <header>Receptores</header>
+            <fieldset id="receptores"></fieldset>
+          </article>
+        </div>
+        <footer>
+          <p>2025 © larmcr</p>
+        </footer>
+      </article>
+    </main>
+    <style>
+      #drop-zone {
+        border: 2px dashed #ccc;
+        border-radius: 10px;
+        padding: 10px;
+        text-align: center;
+        cursor: pointer;
+      }
+
+      #drop-zone.highlight {
+        border-color: #6c757d;
+        background-color: #f8f9fa;
+      }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fast-xml-parser/4.5.1/fxparser.min.js"></script>
+    <script defer>
+      ((win, doc) => {
+        const xmlParser = new XMLParser();
+
+        const xmlFileNames = new Set();
+
+        const fileListElement = doc.getElementById('file-list');
+        const emisoresElement = doc.getElementById('emisores');
+        const receptoresElement = doc.getElementById('receptores');
+
+        const facturas = {};
+        const entidades = {};
+        const entidadesEmisores = {};
+        const entidadesReceptores = {};
+
+        const addEntidad = (entity) => {
+          const { CorreoElectronico, Identificacion, Nombre, NombreComercial } = entity;
+          const { Tipo, Numero } = Identificacion;
+          const id = `${Tipo}|${Numero}`;
+          if (!entidades[id]) {
+            entidades[id] = {
+              Correo: CorreoElectronico,
+              Nombre: `${Nombre}${NombreComercial ? `|${NombreComercial}` : ''}`,
+              Emisores: [],
+              Receptores: [],
+            };
+          }
+          return id;
+        };
+
+        const choiceEmisorReceptor = (ev) => {
+          const emisores = doc.querySelectorAll('.emisor');
+          const receptores = doc.querySelectorAll('.receptor');
+          const consecutivos = [];
+          emisores.forEach((emisor) => {
+            if (emisor.checked) {
+              consecutivos.push(...entidades[emisor.value].Receptores);
+            }
+          });
+          receptores.forEach((receptor) => {
+            if (receptor.checked) {
+              consecutivos.push(...entidades[receptor.value].Emisores);
+            }
+          });
+          console.info(consecutivos);
+        };
+
+        const addEmisor = (idEmisor) => {
+          if (!entidadesEmisores[idEmisor]) {
+            entidadesEmisores[idEmisor] = entidades[idEmisor].Nombre;
+            const [nombre, nombreComercial] = entidades[idEmisor].Nombre.split('|');
+            const label = doc.createElement('label');
+            const input = doc.createElement('input');
+            input.type = 'checkbox';
+            input.role = 'switch';
+            input.className = 'emisor';
+            input.value = idEmisor;
+            input.addEventListener('change', choiceEmisorReceptor);
+            const span = doc.createElement('span');
+            if (nombreComercial) {
+              span.setAttribute('data-tooltip', nombreComercial);
+            }
+            span.textContent = nombre;
+            label.appendChild(input);
+            label.appendChild(span);
+            emisoresElement.appendChild(label);
+          }
+        };
+
+        const addReceptor = (idReceptor) => {
+          if (!entidadesReceptores[idReceptor]) {
+            entidadesReceptores[idReceptor] = entidades[idReceptor].Nombre;
+            const [nombre, nombreComercial] = entidades[idReceptor].Nombre.split('|');
+            const label = doc.createElement('label');
+            const input = doc.createElement('input');
+            input.type = 'checkbox';
+            input.role = 'switch';
+            input.className = 'receptor';
+            input.value = idReceptor;
+            input.addEventListener('change', choiceEmisorReceptor);
+            const span = doc.createElement('span');
+            if (nombreComercial) {
+              span.setAttribute('data-tooltip', nombreComercial);
+            }
+            span.textContent = nombre;
+            label.appendChild(input);
+            label.appendChild(span);
+            receptoresElement.appendChild(label);
+          }
+        };
+
+        const processJson = (json) => {
+          // console.info(json);
+          const { NumeroConsecutivo, Emisor, Receptor } = json.FacturaElectronica;
+          const idEmisor = addEntidad(Emisor);
+          const idReceptor = addEntidad(Receptor);
+          entidades[idEmisor].Receptores.push(NumeroConsecutivo);
+          entidades[idReceptor].Emisores.push(NumeroConsecutivo);
+          addEmisor(idEmisor);
+          addReceptor(idReceptor);
+          const lineaDetalle = json.FacturaElectronica?.DetalleServicio?.LineaDetalle || [];
+          const detalle = lineaDetalle && !Array.isArray(lineaDetalle) ? [lineaDetalle] : lineaDetalle;
+          facturas[json.FacturaElectronica.NumeroConsecutivo] = {
+            Emisor: idEmisor,
+            Receptor: idReceptor,
+            Fecha: json.FacturaElectronica.FechaEmision,
+            Moneda: json.FacturaElectronica.ResumenFactura?.CodigoTipoMoneda?.CodigoMoneda ?? 'CRC',
+            TipoCambio: json.FacturaElectronica.ResumenFactura?.CodigoTipoMoneda?.TipoCambio ?? 1.0,
+            Detalle: detalle,
+          };
+        };
+
+        const readFiles = (files) => {
+          for (const file of files) {
+            const { name, type } = file;
+            if (type === 'text/xml' || type === 'application/xml') {
+              if (!xmlFileNames.has(name)) {
+                xmlFileNames.add(name);
+                const li = doc.createElement('li');
+                li.textContent = file.name;
+                fileListElement.appendChild(li);
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                  const content = ev.target.result;
+                  const json = xmlParser.parse(content);
+                  processJson(json);
+                };
+                reader.readAsText(file);
+              } else {
+                alert(`El archivo ${name} ya ha sido cargado.`);
+              }
+            } else {
+              alert(`El archivo ${name} no es un XML válido.`);
+            }
+          }
+          console.info(entidades);
+          console.info(entidadesEmisores);
+          console.info(entidadesReceptores);
+          console.info(facturas);
+        };
+
+        const handleDrop = (ev) => {
+          const files = ev.dataTransfer.files;
+          readFiles(files);
+        };
+
+        const preventDefaults = (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+        };
+
+        const dropZone = doc.getElementById('drop-zone');
+        const fileInput = doc.getElementById('file-input');
+
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach((eventName) => {
+          dropZone.addEventListener(eventName, preventDefaults, false);
+        });
+
+        dropZone.addEventListener('dragover', () => dropZone.classList.add('highlight'), false);
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('highlight'), false);
+        dropZone.addEventListener('drop', () => dropZone.classList.remove('highlight'), false);
+
+        dropZone.addEventListener('drop', handleDrop, false);
+        dropZone.addEventListener('click', () => fileInput.click());
+
+        fileInput.addEventListener('change', (ev) => {
+          const files = ev.target.files;
+          readFiles(files);
+        });
+      })(window, document);
+    </script>
+  </body>
+</html>
