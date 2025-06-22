@@ -25,7 +25,16 @@
             </div>
             <br />
             <div>
-              <ul id="file-list"></ul>
+              <details>
+                <summary role="button" class="outline">Incluidos (<small id="archivos-incluidos">0</small>)</summary>
+                <ul id="incluidos"></ul>
+              </details>
+              <details>
+                <summary role="button" class="outline secondary">
+                  Ignorados (<small id="archivos-ignorados">0</small>)
+                </summary>
+                <ul id="ignorados"></ul>
+              </details>
             </div>
           </article>
           <article>
@@ -80,9 +89,13 @@
       ((win, doc) => {
         const xmlParser = new XMLParser();
 
-        const xmlFileNames = new Set();
+        const xmlIncluidos = new Set();
+        const xmlIgnorados = new Set();
 
-        const fileListElement = doc.getElementById('file-list');
+        const incluidosElement = doc.getElementById('incluidos');
+        const ignoradosElement = doc.getElementById('ignorados');
+        const archivosIncluidosElement = doc.getElementById('archivos-incluidos');
+        const archivosIgnoradosElement = doc.getElementById('archivos-ignorados');
         const emisoresElement = doc.getElementById('emisores');
         const receptoresElement = doc.getElementById('receptores');
 
@@ -158,6 +171,7 @@
             const span = doc.createElement('span');
             if (nombreComercial) {
               span.setAttribute('data-tooltip', nombreComercial);
+              span;
             }
             span.textContent = nombre;
             label.appendChild(input);
@@ -214,11 +228,11 @@
           for (const file of files) {
             const { name, type } = file;
             if (type === 'text/xml' || type === 'application/xml') {
-              if (!xmlFileNames.has(name)) {
-                xmlFileNames.add(name);
+              if (!xmlIncluidos.has(name)) {
+                xmlIncluidos.add(name);
                 const li = doc.createElement('li');
-                li.textContent = file.name;
-                fileListElement.appendChild(li);
+                li.textContent = name;
+                incluidosElement.appendChild(li);
                 const reader = new FileReader();
                 reader.onload = (ev) => {
                   const content = ev.target.result;
@@ -226,47 +240,37 @@
                   processJson(json);
                 };
                 reader.readAsText(file);
-              } else {
-                alert(`El archivo ${name} ya ha sido cargado.`);
               }
-            } else {
-              alert(`El archivo ${name} no es un XML válido.`);
+            } else if (!xmlIgnorados.has(name)) {
+              xmlIgnorados.add(name);
+              const li = doc.createElement('li');
+              li.textContent = name;
+              ignoradosElement.appendChild(li);
             }
           }
+          archivosIncluidosElement.innerHTML = xmlIncluidos.size;
+          archivosIgnoradosElement.innerHTML = xmlIgnorados.size;
           console.info(entidades);
           console.info(entidadesEmisores);
           console.info(entidadesReceptores);
           console.info(facturas);
         };
 
-        const handleDrop = (ev) => {
-          const files = ev.dataTransfer.files;
-          readFiles(files);
-        };
-
         const preventDefaults = (ev) => {
           ev.preventDefault();
           ev.stopPropagation();
         };
-
         const dropZone = doc.getElementById('drop-zone');
         const fileInput = doc.getElementById('file-input');
-
         ['dragenter', 'dragover', 'dragleave', 'drop'].forEach((eventName) => {
           dropZone.addEventListener(eventName, preventDefaults, false);
         });
-
         dropZone.addEventListener('dragover', () => dropZone.classList.add('highlight'), false);
         dropZone.addEventListener('dragleave', () => dropZone.classList.remove('highlight'), false);
         dropZone.addEventListener('drop', () => dropZone.classList.remove('highlight'), false);
-
-        dropZone.addEventListener('drop', handleDrop, false);
+        dropZone.addEventListener('drop', (ev) => readFiles(ev.dataTransfer.files), false);
         dropZone.addEventListener('click', () => fileInput.click());
-
-        fileInput.addEventListener('change', (ev) => {
-          const files = ev.target.files;
-          readFiles(files);
-        });
+        fileInput.addEventListener('change', (ev) => readFiles(ev.target.files));
       })(window, document);
     </script>
   </body>
